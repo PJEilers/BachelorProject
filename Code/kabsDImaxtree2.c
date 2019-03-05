@@ -28,7 +28,7 @@ typedef unsigned char ubyte;
 typedef unsigned short greyval;
 
 
-
+#define MAXAREA       9223372036854775807
 #define NUMLEVELS     65536
 #define CONNECTIVITY  4
 
@@ -435,10 +435,11 @@ int flood(greyval *ORI, greyval *P_ORI, int h,
 	 node->PeakLevel  = level;
 	 numbernodes[level] += 1;    /* increase this for next time */
 	 NodeAtLevel[level] = false; /* finalise this node */
-	 area++;	       	/* Need to update the parent area also	*/
+	 area= area + 1+h*h;	       	/* Need to update the parent area also	*/\
+
        }
      }else /* Stable or background regions */	
-       area++;
+       area= area + 1+h*h;
      /* process the neighbors */
      numneighbors = GetNeighbors(p, neighbors);
      for (i=0; i<numneighbors; i++){
@@ -518,6 +519,7 @@ void MaxTreeProcessNode(MaxTree t, long lambda, long idx, kFunc kf, long maxarea
    k = (*kf)(newlevel);
    if (t[idx].PeakLevel - t[parent].Level> k){
      if ((t[idx].Area>=lambda) &&(t[idx].Area<=maxarea)){
+
        if (t[parent].kPrime>=0){
 	 t[idx].NewLevel = t[parent].NewLevel + diflevel;
 	 t[idx].kPrime = k;     
@@ -684,7 +686,7 @@ int main(int argc, char *argv[])
 
    if (argc<4)
    {
-      printf("Usage: %s <original inputimage> <processed input image> <lambda> [k][maxarea]\n", argv[0]);
+      printf("Usage: %s <original inputimage> <processed input image> <lambda> [k][outputfile][maxarea] \n", argv[0]);
       exit(0);
    }
    else lambda = atol(argv[3]);
@@ -695,10 +697,10 @@ int main(int argc, char *argv[])
    /*printf("\n   Read Buffers Ready\n");*/
    if (argc>4)
      k=atoi(argv[4]);
-   if (argc>5)
-     maxarea = atoi(argv[5]);
+   if (argc>6)
+     maxarea = atoi(argv[6]);
    else
-     maxarea = ImageSize;
+     maxarea = MAXAREA;
    if (maxarea<0)
      maxarea = -(maxarea*ImageSize)/100;
    /* STATUS keeps track of each pixel's labelling */
@@ -719,6 +721,7 @@ int main(int argc, char *argv[])
      p = FindHMinPixel(ORI[plane],P_ORI[plane]);
      hmin = P_ORI[plane][p];
      peaklevel = hmin;
+     printf("%ld\n", hmin);
      NodeAtLevel[hmin] = true;
      HQueueCreate();
      /*   printf("\n   Hierarchical Queues Ready\n");*/
@@ -732,7 +735,7 @@ int main(int argc, char *argv[])
      flood(ORI[plane],P_ORI[plane],hmin, &area, &peaklevel);
      /*printf("\n   MaxTree Structure Completed!\n");*/
 
-     MaxTreeFilter(ORI[plane],Tree, lambda, kflatLinear, maxarea);
+     MaxTreeFilter(ORI[plane],Tree, lambda, kflatConstant, maxarea);
      /*   printf("\n   Area Opening Completed!\n");*/
    
      /* Generate a log file */
@@ -746,7 +749,13 @@ int main(int argc, char *argv[])
   museconds=1E6*(timestruct.tms_utime-start)/(float) (ticksize);
   printf ("%8d %10.4f\n", lambda, museconds/1000000);
    
-   WritePGM("out.tif", ImageWidth, ImageHeight, NumPlanes);
+  if(argc > 5) {
+    WritePGM(argv[5], ImageWidth, ImageHeight, NumPlanes);   
+  } else {
+    WritePGM("out.tif", ImageWidth, ImageHeight, NumPlanes);  
+  }
+  
+
    
    for(plane=0; plane<NumPlanes; plane++){
      free(ORI[plane]);

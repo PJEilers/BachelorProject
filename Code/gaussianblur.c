@@ -52,7 +52,7 @@ FIBITMAP* GenericLoader(const char* lpszPathName, int flag) {
   return NULL;
 }
 
-void WriteTIFF(char *fname, long width, long height, int bitspp, long numplanes){
+void WriteTIFF(char *fname, long width, long height, int bitspp, long numplanes, greyval **im){
   FIBITMAP *outmap;
   long i,j,y,x,plane; 
   FREE_IMAGE_FORMAT fif = FreeImage_GetFIFFromFilename(fname);
@@ -74,7 +74,7 @@ void WriteTIFF(char *fname, long width, long height, int bitspp, long numplanes)
       imagebuf = FreeImage_GetScanLine(outmap,j);
       for (x=0;x<width;x++,i++)
         for (plane=0;plane<numplanes;plane++)
-	 imagebuf[numplanes*x+plane]=new[plane][i];	
+	 imagebuf[numplanes*x+plane]=im[plane][i];	
     }
 
   } else {
@@ -89,7 +89,7 @@ void WriteTIFF(char *fname, long width, long height, int bitspp, long numplanes)
       imagebuf = (greyval *)FreeImage_GetScanLine(outmap,j);
       for (x=0;x<width;x++,i++)
         for (plane=0;plane<numplanes;plane++)
-	 imagebuf[numplanes*x+plane]=new[plane][i];	
+	 imagebuf[numplanes*x+plane]=im[plane][i];	
 	
     }
   }
@@ -362,32 +362,67 @@ void gaussianBlur() {
 
 /* Original image minus low pass filter */
 
-void subtractImages() {
-  long i;
+
+void subtractImages(int beta) {
+  greyval **pos, **neg;
+  long i, plane;
+  long imsize = ImageWidth*ImageHeight;
+  
+  //Positive values
+  
+  pos = calloc((size_t)NumPlanes, sizeof(greyval *));
+  assert(pos!=NULL);
+  for (i=0;i<NumPlanes;i++){
+    pos[i] = calloc((size_t)imsize, sizeof(greyval));
+    assert(pos[i]!=NULL);
+  }
+  
+  //Negative values
+  
+  neg = calloc((size_t)NumPlanes, sizeof(greyval *));
+  assert(neg!=NULL);
+  for (i=0;i<NumPlanes;i++){
+    neg[i] = calloc((size_t)imsize, sizeof(greyval));
+    assert(neg[i]!=NULL);
+  }
   for(i = 0; i <ImageWidth*ImageHeight; i++) {
     int pixel = (int) (ORI[0][i] - new[0] [i]);
     if(pixel < 0) {
-
-      new[0][i] = (greyval) (NUMLEVELS + pixel);
+      neg[0][i] = (greyval) pixel*-1*beta;
     } else {
-      new[0][i] = (greyval) (pixel);
+      pos[0][i] = (greyval) (pixel)*beta;
     }
   }
+  WriteTIFF("pos.tif", ImageWidth, ImageHeight, 16, NumPlanes, pos);
+  WriteTIFF("neg.tif", ImageWidth, ImageHeight, 16, NumPlanes, neg);
+  
+  for(plane=0; plane<NumPlanes; plane++){
+     free(pos[plane]);
+     free(neg[plane]);
+   }
+  
+  free(pos);
+  free(neg);
+  
 }
 
 int main(int argc, char *argv[]) {
   
   FreeImage_Initialise(0);
-  int i,plane ;
+  int i,plane, beta =1;
   
   if (argc < 3)  {
-    printf("Usage: %s inputfile ksize\n", argv[0]);
+    printf("Usage: %s inputfile ksize [beta][\n", argv[0]);
     exit(0);
   }
   ksize = atoi(argv[2]);
   if(ksize % 2 == 0) {
     printf("ksize must be odd\n");
     exit(0);
+  }
+  
+  if (argc  == 4) {
+    beta = atoi(argv[3]);
   }
   
   long width, height;
@@ -400,8 +435,8 @@ int main(int argc, char *argv[]) {
   //printf("sigma: %lf\n", sigma);
   //printf("numplanes: %d\n", NumPlanes);
   gaussianBlur();
-  subtractImages();
-  WriteTIFF("out.tif", ImageWidth, ImageHeight, 16, NumPlanes);
+  subtractImages(beta);
+
  // printf("ImageHeight: %ld, ImageWidth: %ld\n", ImageHeight, ImageWidth);
   
   for(plane=0; plane<NumPlanes; plane++){
