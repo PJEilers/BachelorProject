@@ -435,11 +435,11 @@ int flood(greyval *ORI, greyval *P_ORI, int h,
 	 node->PeakLevel  = level;
 	 numbernodes[level] += 1;    /* increase this for next time */
 	 NodeAtLevel[level] = false; /* finalise this node */
-	 area= area + 1+h*h;	       	/* Need to update the parent area also	*/\
+	 area= area + 1+h;	       	/* Need to update the parent area also	*/\
 
        }
      }else /* Stable or background regions */	
-       area= area + 1+h*h;
+       area= area + 1+h;
      /* process the neighbors */
      numneighbors = GetNeighbors(p, neighbors);
      for (i=0; i<numneighbors; i++){
