@@ -192,6 +192,8 @@ void usm (int beta) {
 
 
 int main(int argc, char *argv[]) {
+    
+  FreeImage_Initialise(0);
   int beta = 1;
   if (argc < 5) {
     printf ("Usage: %s original positive negative beta\n", argv[0]);
@@ -210,6 +212,8 @@ int main(int argc, char *argv[]) {
   }
   
   usm(beta);
+  
+  FreeImage_DeInitialise();
   
   WriteTIFF("usm.tif", ImageWidth, ImageHeight, 16, NumPlanes, ORI);
   

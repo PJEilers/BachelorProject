@@ -385,12 +385,13 @@ void subtractImages(int beta) {
     neg[i] = calloc((size_t)imsize, sizeof(greyval));
     assert(neg[i]!=NULL);
   }
+  
   for(i = 0; i <ImageWidth*ImageHeight; i++) {
-    int pixel = (int) (ORI[0][i] - new[0] [i]);
+    int pixel = (int) (ORI[0][i] - new[0][i]);
     if(pixel < 0) {
-      neg[0][i] = (greyval) pixel*-1*beta;
+      neg[0][i] = (pixel*beta*-1 > NUMLEVELS) ? NUMLEVELS -1 :(greyval) pixel*-1*beta;
     } else {
-      pos[0][i] = (greyval) (pixel)*beta;
+      pos[0][i] = (pixel*beta > NUMLEVELS) ? NUMLEVELS-1 : (greyval) pixel*beta;
     }
   }
   WriteTIFF("pos.tif", ImageWidth, ImageHeight, 16, NumPlanes, pos);
@@ -431,9 +432,6 @@ int main(int argc, char *argv[]) {
   ImageHeight = height;
   eWidth = width + ksize -1;
   eHeight = height + ksize -1;
-  double sigma = getStdDev();
-  //printf("sigma: %lf\n", sigma);
-  //printf("numplanes: %d\n", NumPlanes);
   gaussianBlur();
   subtractImages(beta);
 
