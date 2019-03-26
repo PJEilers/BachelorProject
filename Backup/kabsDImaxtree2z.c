@@ -516,7 +516,7 @@ long kflatLinear(long greylevel, long sog, long lambda2){
 }
 
 long kflatConditional(long greylevel, long sog, long lambda2) {
-  return (sog > lambda2 ? kbase :  0));
+  return (sog > lambda2 ? kbase : 0);
 }
 
 
@@ -530,11 +530,25 @@ void MaxTreeProcessNode(MaxTree t, long lambda1, long lambda2, long idx, kFunc k
 
    diflevel = t[idx].Level - t[parent].Level;
    newlevel = t[parent].NewLevel + diflevel;
-   k = (*kf)(diflevel, t[idx].SumGreyLevel, lambda2);
+   k = (*kf)(newlevel, t[idx].SumGreyLevel, lambda2);
    if (t[idx].PeakLevel - t[parent].Level> k){
-       /* initiate absorption */
+     if ((t[idx].Area>=lambda1) &&(t[idx].Area<=maxarea)){
+
+       if (t[parent].kPrime>=0){
+	 t[idx].NewLevel = t[parent].NewLevel + diflevel;
+	 t[idx].kPrime = k;     
+       } else {                             /* absorb node */
+	 t[idx].kPrime = t[parent].kPrime + diflevel; 
+	 t[idx].NewLevel = t[parent].NewLevel;
+         if (t[idx].kPrime>0){              /* partial absorption */
+	   t[idx].NewLevel += t[idx].kPrime+k;
+           t[idx].kPrime = k;
+         }
+       }
+     } else {                               /* initiate absorption */
        t[idx].NewLevel = t[parent].NewLevel;
        t[idx].kPrime = -k;     
+     }
    } else {
      if (t[parent].kPrime<0){
        t[idx].NewLevel = t[parent].NewLevel;
@@ -580,15 +594,18 @@ void MaxTreeFilter(greyval *ORI, MaxTree t, long lambda1, long lambda2, kFunc k,
    SetPeakLevels(t);
    while (numbernodes[h]==0)
      h++;                    /* find root*/
-     
-     
    /*process root*/   
 
 
    idx = NumPixelsBelowLevel[h];
 
-   t[idx].kPrime = (*k)(t[idx].Level, t[idx].SumGreyLevel, lambda2);
-   t[idx].NewLevel = t[idx].Level;  
+   if ((t[idx].Area>=lambda1) &&(t[idx].Area<=maxarea)){
+     t[idx].kPrime = (*k)(t[idx].Level, t[idx].SumGreyLevel, lambda2);
+     t[idx].NewLevel = t[idx].Level;  
+   } else {
+     t[idx].kPrime = -(*k)(t[idx].Level, t[idx].SumGreyLevel, lambda2);
+     t[idx].NewLevel = 0;  
+   }
     
    h++;
     

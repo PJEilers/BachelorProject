@@ -32,6 +32,7 @@ typedef unsigned short greyval;
 #define MAXAREA       9223372036854775807
 #define NUMLEVELS     65536
 #define CONNECTIVITY  4
+#define THRESHOLD     100
 
 double kbase, background = 0, alpha=0;
 
@@ -80,6 +81,7 @@ greyval **ORI;    /* Denotes the original ... in the unproceesed input image */
  * last case STATUS(p)=k. */
 #define ST_NotAnalyzed  -1
 #define ST_InTheQueue   -2
+#define ST_Preserve -3
 long *STATUS;
 
 bool NodeAtLevel[NUMLEVELS];
@@ -504,19 +506,19 @@ int flood(greyval *ORI, greyval *P_ORI, int h,
 /* Filtering Functions                         */
 /***********************************************/
 
-typedef long (*kFunc)(long, long, long);
+typedef long (*kFunc)(long, long);
 
-long kflatConstant(long greylevel, long sog, long lambda2){
+long kflatConstant(long greylevel, long peaklevel){
   return (long) kbase;
 }
 
-long kflatLinear(long greylevel, long sog, long lambda2){
+long kflatLinear(long greylevel, long peaklevel){
     
   return (long) (kbase*(double)greylevel/100.0);
 }
 
-long kflatConditional(long greylevel, long sog, long lambda2) {
-  return (sog > lambda2 ? kbase :  0));
+long kflatConditional(long greylevel, long peaklevel) {
+  return (peaklevel > kbase ? kbase : 0);
 }
 
 
@@ -530,11 +532,26 @@ void MaxTreeProcessNode(MaxTree t, long lambda1, long lambda2, long idx, kFunc k
 
    diflevel = t[idx].Level - t[parent].Level;
    newlevel = t[parent].NewLevel + diflevel;
-   k = (*kf)(diflevel, t[idx].SumGreyLevel, lambda2);
-   if (t[idx].PeakLevel - t[parent].Level> k){
-       /* initiate absorption */
+   k = (*kf)(newlevel, t[idx].PeakLevel);
+   if (t[parent].Status == ST_Preserve){
+     if (k>0){
+
+       if (t[parent].kPrime>=0){
+	 t[idx].NewLevel = t[parent].NewLevel + diflevel;
+	 t[idx].kPrime = k;     
+         t[idx].Status = ST_Preserve;
+       } else {                             /* absorb node */
+	 t[idx].kPrime = t[parent].kPrime + diflevel; 
+	 t[idx].NewLevel = t[parent].NewLevel;
+         if (t[idx].kPrime>0){              /* partial absorption */
+	   t[idx].NewLevel += t[idx].kPrime+k;
+           t[idx].kPrime = k;
+         }
+       }
+     } else {                               /* initiate absorption */
        t[idx].NewLevel = t[parent].NewLevel;
        t[idx].kPrime = -k;     
+     }
    } else {
      if (t[parent].kPrime<0){
        t[idx].NewLevel = t[parent].NewLevel;
@@ -572,7 +589,7 @@ void SetPeakLevels(MaxTree t)
 } /* SetPeakLevels */
 
 
-void MaxTreeFilter(greyval *ORI, MaxTree t, long lambda1, long lambda2, kFunc k, long maxarea)
+void MaxTreeFilter(greyval *ORI, MaxTree t, long lambda1, long lambda2, kFunc kf, long maxarea)
 {
    long i, idx;
    int h=0;
@@ -580,15 +597,22 @@ void MaxTreeFilter(greyval *ORI, MaxTree t, long lambda1, long lambda2, kFunc k,
    SetPeakLevels(t);
    while (numbernodes[h]==0)
      h++;                    /* find root*/
-     
-     
    /*process root*/   
 
-
    idx = NumPixelsBelowLevel[h];
-
-   t[idx].kPrime = (*k)(t[idx].Level, t[idx].SumGreyLevel, lambda2);
-   t[idx].NewLevel = t[idx].Level;  
+   
+   long k = (*kf)(t[idx].Level, t[idx].PeakLevel);
+   
+   
+   if (k>0){
+     t[idx].kPrime = (*kf)(t[idx].Level, t[idx].PeakLevel);
+     printf("k:%d\n",t[idx].kPrime);
+     t[idx].NewLevel = t[idx].Level;  
+     t[idx].Status = ST_Preserve;
+   } else {
+     t[idx].kPrime = -(*kf)(t[idx].Level, t[idx].PeakLevel);
+     t[idx].NewLevel = 0;  
+   }
     
    h++;
     
@@ -597,7 +621,7 @@ void MaxTreeFilter(greyval *ORI, MaxTree t, long lambda1, long lambda2, kFunc k,
       for (i=0; i<numbernodes[h]; i++)
       {
 	 idx = NumPixelsBelowLevel[h] + i;
-         MaxTreeProcessNode(t, lambda1, lambda2, idx, k,maxarea);
+         MaxTreeProcessNode(t, lambda1, lambda2, idx, kf,maxarea);
       }
       h++;
    }

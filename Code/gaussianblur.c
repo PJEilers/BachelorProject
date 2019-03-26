@@ -233,8 +233,6 @@ double *generateKernel(double sigma) {
   for(i = 0; i < k*k; i ++) {
     kernel[i] /= sum;
   }
-  
-  
   /*for(i = 0; i < k; i++) {
     for(j = 0; j < k; j++) {
       printf("%lf ", kernel[i*k + j]);
