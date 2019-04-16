@@ -57,7 +57,6 @@ struct MaxNode
 {
   long Parent;
   long Status;
-  long Area;
   long SumGreyLevel;
   int PeakLevel;
   int kPrime;
@@ -407,12 +406,11 @@ int GetNeighbors(long p, long *neighbors)
 /* image that is being processed               */
 /***********************************************/
 
-int flood(greyval *ORI, greyval *P_ORI, int h, 
-	  long *thisarea, int *thispeaklevel, long *thisSumGreyLevel)
+int flood(greyval *ORI, greyval *P_ORI, int h
+, int *thispeaklevel, long *thisSumGreyLevel)
 {
    long neighbors[CONNECTIVITY];
    long p, q,idx;
-   long area = *thisarea, childarea;
    int numneighbors, i, m, level, peaklevel = h, childpeaklevel;
    long sumGreyLevel = *thisSumGreyLevel, childSumGreylevel;
    MaxNode *node;
@@ -427,7 +425,6 @@ int flood(greyval *ORI, greyval *P_ORI, int h,
        
        /* Detect the node */
        node = Tree + (NumPixelsBelowLevel[level] + numbernodes[level]);
-       node->Area++;
        peaklevel = (peaklevel<level)? level : peaklevel;
        if(level>h){ /* Anti-extensive case */
 	 
@@ -437,13 +434,11 @@ int flood(greyval *ORI, greyval *P_ORI, int h,
 	 node->Level  = level;
 	 node->PeakLevel  = level;
 	 numbernodes[level] += 1;    /* increase this for next time */
-	 NodeAtLevel[level] = false; /* finalise this node */
-	 area= area+=1;
+	 NodeAtLevel[level] = false; /* finalise this node */;
 	 sumGreyLevel += h*h;	       	/* Need to update the parent area also	*/\
 
        }
      }else /* Stable or background regions */	
-       area+=1;
        sumGreyLevel += h*h;   
      /* process the neighbors */
      numneighbors = GetNeighbors(p, neighbors);
@@ -457,14 +452,12 @@ int flood(greyval *ORI, greyval *P_ORI, int h,
 	 if (P_ORI[q] > P_ORI[p])
 	   {
 	     m = P_ORI[q];
-	     childarea = 0;
 	     childpeaklevel = m;
              childSumGreylevel = 0;
 	     do
 	       {
-		 m = flood(ORI, P_ORI, m, &childarea,&childpeaklevel, &childSumGreylevel);
+		 m = flood(ORI, P_ORI, m, &childpeaklevel, &childSumGreylevel);
 	       } while (m!=h);
-	     area += childarea;
              sumGreyLevel += childSumGreylevel;
 	     peaklevel = (peaklevel<childpeaklevel)? childpeaklevel : peaklevel;
 	   }
@@ -487,13 +480,11 @@ int flood(greyval *ORI, greyval *P_ORI, int h,
        node = Tree + idx;
        node->Parent = idx;
      }
-   node->Area += area;
    node->Status = MTS_Ok;
    node->Level = h;
    node->PeakLevel = h;
    node->SumGreyLevel += sumGreyLevel;
    NodeAtLevel[h] = false;
-   *thisarea = node->Area;
    *thispeaklevel = node->PeakLevel;
    *thisSumGreyLevel = node->SumGreyLevel;
    return(m);
@@ -515,13 +506,13 @@ long kflatLinear(long greylevel, long sog, long lambda2){
   return (long) (kbase*(double)greylevel/100.0);
 }
 
-long kflatConditional(long greylevel, long sog, long lambda2) {
-  return (sog > lambda2 ? kbase :  0));
+long kflatConditional(long greylevel, long sog, long lambda) {
+  return (sog > lambda ? kbase :  0);
 }
 
 
 
-void MaxTreeProcessNode(MaxTree t, long lambda1, long lambda2, long idx, kFunc kf, long maxarea)
+void MaxTreeProcessNode(MaxTree t, long lambda, long idx, kFunc kf, long maxarea)
 /* Deletes node idx and possible one or more of its parents. */
 {
   long k,parent, diflevel,newlevel;
@@ -530,7 +521,7 @@ void MaxTreeProcessNode(MaxTree t, long lambda1, long lambda2, long idx, kFunc k
 
    diflevel = t[idx].Level - t[parent].Level;
    newlevel = t[parent].NewLevel + diflevel;
-   k = (*kf)(diflevel, t[idx].SumGreyLevel, lambda2);
+   k = (*kf)(diflevel, t[idx].SumGreyLevel, lambda);
    if (t[idx].PeakLevel - t[parent].Level> k){
        /* initiate absorption */
        t[idx].NewLevel = t[parent].NewLevel;
@@ -572,7 +563,7 @@ void SetPeakLevels(MaxTree t)
 } /* SetPeakLevels */
 
 
-void MaxTreeFilter(greyval *ORI, MaxTree t, long lambda1, long lambda2, kFunc k, long maxarea)
+void MaxTreeFilter(greyval *ORI, MaxTree t, long lambda, kFunc k, long maxarea)
 {
    long i, idx;
    int h=0;
@@ -587,7 +578,7 @@ void MaxTreeFilter(greyval *ORI, MaxTree t, long lambda1, long lambda2, kFunc k,
 
    idx = NumPixelsBelowLevel[h];
 
-   t[idx].kPrime = (*k)(t[idx].Level, t[idx].SumGreyLevel, lambda2);
+   t[idx].kPrime = (*k)(t[idx].Level, t[idx].SumGreyLevel, lambda);
    t[idx].NewLevel = t[idx].Level;  
     
    h++;
@@ -597,7 +588,7 @@ void MaxTreeFilter(greyval *ORI, MaxTree t, long lambda1, long lambda2, kFunc k,
       for (i=0; i<numbernodes[h]; i++)
       {
 	 idx = NumPixelsBelowLevel[h] + i;
-         MaxTreeProcessNode(t, lambda1, lambda2, idx, k,maxarea);
+         MaxTreeProcessNode(t, lambda, idx, k,maxarea);
       }
       h++;
    }
@@ -654,7 +645,6 @@ void CreateLog(MaxTree t,int hmin, char *fname1, char *fname2)
       {
 		  idx = NumPixelsBelowLevel[l] + i;
 		  level  = t[idx].Level;
-		  area   = t[idx].Area;
 		  parent = t[idx].Parent;
 		  /* parent level*/ 
 		  parent_level = t[parent].Level;
@@ -674,8 +664,7 @@ int main(int argc, char *argv[])
    long area=0,k=0, maxarea;
    int peaklevel;
    long sumGreyLevel;
-   long lambda1;
-   long lambda2;
+   long lambda;;
    int hmin;
    short buffer;
   struct tms timestruct;
@@ -685,25 +674,16 @@ int main(int argc, char *argv[])
 
    if (argc<5)
    {
-      printf("Usage: %s <original inputimage> <processed input image> <outputfile> <lambda1> <lambda2> [k][maxarea] \n", argv[0]);
+      printf("Usage: %s <original inputimage> <processed input image> <outputfile> <lambda> [k] \n", argv[0]);
       exit(0);
    }
-   lambda1 = atol(argv[4]);
-   lambda2 = atol(argv[5]);
+   lambda = atol(argv[4]);
    FreeImage_Initialise(0);
    
    ReadPGM(argv[1],buffer=1); /* ORI image buffer */
    ReadPGM(argv[2],buffer=2); /* P_ORI  image buffer */
    /*printf("\n   Read Buffers Ready\n");*/
-   if (argc>6)
-     k=atoi(argv[6]);
-   if (argc>7) {
-     maxarea = atoi(argv[7]);
-   } else {
-     maxarea = MAXAREA;
-   } 
-   if (maxarea<0)
-     maxarea = -(maxarea*ImageSize)/100;
+   if (argc>5) k=atoi(argv[5]);
    /* STATUS keeps track of each pixel's labelling */
    /*printf("\n   Levels initialised\n");	*/
     
@@ -733,10 +713,10 @@ int main(int argc, char *argv[])
      assert(Tree!=NULL);
      /*printf("\n   Max-Tree structure Ready\n");*/
      
-     flood(ORI[plane],P_ORI[plane],hmin, &area, &peaklevel, &sumGreyLevel);
+     flood(ORI[plane],P_ORI[plane],hmin, &peaklevel, &sumGreyLevel);
      /*printf("\n   MaxTree Structure Completed!\n");*/
 
-     MaxTreeFilter(ORI[plane],Tree, lambda1, lambda2, kflatConditional, maxarea);
+     MaxTreeFilter(ORI[plane],Tree, lambda, kflatConditional, maxarea);
      /*   printf("\n   Area Opening Completed!\n");*/
    
      /* Generate a log file */
@@ -748,7 +728,7 @@ int main(int argc, char *argv[])
    }
   times(&timestruct);
   museconds=1E6*(timestruct.tms_utime-start)/(float) (ticksize);
-  printf ("%8ld %8ld %10.4f\n", lambda1, lambda2, museconds/1000000);
+  printf ("%8ld %10.4f\n", lambda, museconds/1000000);
   WritePGM(argv[3], ImageWidth, ImageHeight, NumPlanes);   
   
 

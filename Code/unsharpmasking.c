@@ -20,6 +20,8 @@ typedef unsigned char ubyte;
 
 #define NUMLEVELS     65536
 
+greyval N;
+
 greyval **ORI;    /* Denotes the original ... in the unproceesed input image */
 greyval **neg;    /* Denotes the processed input image */
 greyval **pos;
@@ -176,16 +178,32 @@ greyval **ReadTIFF(char *fnm, long *width, long *height, long *numplanes){
  
 }
 
+/* Finding the max of an array*/
+
+
+greyval findMax(greyval *buf, long width, long height){
+  greyval max = buf[0];
+  long i,size = width*height;
+  for (i = 1; i<size;i++){
+    max = (buf[i]>max) ? buf[i] : max;
+  }
+  return max;
+}
+
+/* Unsharp Masking*/
+
 void usm (int beta) {
-  int i;
-  for(i = 0; i < ImageSize; i++) {
-    int pixel = (int) ((int)ORI[0][i] + pos[0][i]*beta - neg[0][i]*beta);
-    if(pixel > NUMLEVELS-1) {
-      ORI[0][i] = NUMLEVELS-1;
-    } else if(pixel < 0) {
-      ORI[0][i] = 0;
-    } else { 
-      ORI[0][i] = (greyval) pixel;
+  int i, plane;
+  for (plane = 0; plane < NumPlanes; plane++) {
+    for(i = 0; i < ImageSize; i++) {
+      int pixel = (int) ((int)(ORI[0][i] + pos[0][i]*beta - neg[0][i]*beta));
+      if(pixel > N) {
+        ORI[plane][i] = N;
+      } else if(pixel < 0) {
+        ORI[plane][i] = 0;
+      } else { 
+        ORI[plane][i] = (greyval) pixel;
+      }
     }
   }
 }
@@ -202,7 +220,7 @@ int main(int argc, char *argv[]) {
   ORI =ReadTIFF(argv[1], &ImageWidth, &ImageHeight, &NumPlanes);
   pos = ReadTIFF(argv[2], &ImageWidth, &ImageHeight, &NumPlanes);
   neg = ReadTIFF(argv[3], &ImageWidth, &ImageHeight, &NumPlanes);
-  
+  N = (findMax(ORI[0], ImageWidth, ImageHeight) > 255 ? NUMLEVELS-1 : 255); 
 
   
   ImageSize = ImageWidth * ImageHeight;
@@ -214,8 +232,11 @@ int main(int argc, char *argv[]) {
   usm(beta);
   
   FreeImage_DeInitialise();
-  
-  WriteTIFF("usm.tif", ImageWidth, ImageHeight, 16, NumPlanes, ORI);
+  if (N > 255) {
+    WriteTIFF("usm.tif", ImageWidth, ImageHeight, 16, NumPlanes, ORI);
+  } else {
+    WriteTIFF("usm.tif", ImageWidth, ImageHeight, 8, NumPlanes, ORI);
+  }
   
   
 }

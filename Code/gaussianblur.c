@@ -18,6 +18,7 @@ int ksize;
 
 typedef unsigned short greyval;
 typedef unsigned char ubyte;
+greyval N;
 
 #define NUMLEVELS     65536
 
@@ -179,6 +180,15 @@ greyval **ReadTIFF(char *fnm, long *width, long *height, long *numplanes){
  
 }
 
+greyval findMax(greyval *buf, long width, long height){
+  greyval max = buf[0];
+  long i,size = width*height;
+  for (i = 1; i<size;i++){
+    max = (buf[i]>max) ? buf[i] : max;
+  }
+  return max;
+}
+
 /* Getting standard deviation */
 
 double getStdDev () {;
@@ -204,27 +214,17 @@ double sumArray(double *arr, int size) {
 
 double *generateKernel(double sigma) {
   int k = ksize;
+  int kh = ksize/2;
   double *kernel = malloc(k*k*sizeof(double));
+  printf("half k:%d\n", kh);
+  
 
   int i = 0, j = 0;
   
   for(i = 0; i < k; i++) {
-    double alpha = - ((i-(k-1)/2)*(i-(k-1)/2));
-    kernel[i] = exp(alpha/(2*sigma*sigma));
-  }
-  
-
-  
-  double multiplier = 2.0;
-  while(i < k*k) {
-    for(j = 0; j < k; j++) {
-      kernel[i] = kernel[j]*multiplier;
-      i++;
-    }
-    if(i < k*k/2) {
-      multiplier *=2;
-    } else {
-      multiplier /=2;
+    for (j = 0; j < k; j++) {
+      double alpha = (double) -(((i-kh)*(i-kh)) + ((j-kh)*(j-kh)));
+      kernel[i*k+j] = exp(alpha/(2*sigma*sigma));
     }
   }
   
@@ -233,7 +233,7 @@ double *generateKernel(double sigma) {
   for(i = 0; i < k*k; i ++) {
     kernel[i] /= sum;
   }
-  /*for(i = 0; i < k; i++) {
+ /* for(i = 0; i < k; i++) {
     for(j = 0; j < k; j++) {
       printf("%lf ", kernel[i*k + j]);
     }
@@ -351,6 +351,7 @@ void gaussianBlur() {
       for(k = 0; k < ksize; k++) {
         for(l = 0; l < ksize; l++) {
           new[0][i*ImageWidth+j] += kernel[k*ksize + l] * eImage[0][i*eWidth + j +  l + k*eWidth];
+       //   if(j == 82 && i < 1) printf("%d %lf %d %d\n", ORI[0][i*ImageWidth + j], kernel[k*ksize + l], i*eWidth + j +  l + k*eWidth, eWidth);
         }
       }
     }
@@ -387,18 +388,25 @@ void subtractImages(int beta) {
   for(i = 0; i <ImageWidth*ImageHeight; i++) {
     int pixel = (int) (ORI[0][i] - new[0][i]);
     if(pixel < 0) {
-      neg[0][i] = (pixel*beta*-1 > NUMLEVELS) ? NUMLEVELS -1 :(greyval) pixel*-1*beta;
+      neg[0][i] = (pixel*beta*-1 > N) ? N :(greyval) pixel*-1*beta;
     } else {
-      pos[0][i] = (pixel*beta > NUMLEVELS) ? NUMLEVELS-1 : (greyval) pixel*beta;
+      pos[0][i] = (pixel*beta > N) ? N : (greyval) pixel*beta;
     }
   }
-  WriteTIFF("pos.tif", ImageWidth, ImageHeight, 16, NumPlanes, pos);
-  WriteTIFF("neg.tif", ImageWidth, ImageHeight, 16, NumPlanes, neg);
+  if ( N> 255) {
+    WriteTIFF("pos.tif", ImageWidth, ImageHeight, 16, NumPlanes, pos);
+    WriteTIFF("neg.tif", ImageWidth, ImageHeight, 16, NumPlanes, neg);
+  } else {
+    WriteTIFF("pos.tif", ImageWidth, ImageHeight, 8, NumPlanes, pos);
+    WriteTIFF("neg.tif", ImageWidth, ImageHeight, 8, NumPlanes, neg);
+    
+  }
+  
   
   for(plane=0; plane<NumPlanes; plane++){
-     free(pos[plane]);
-     free(neg[plane]);
-   }
+    free(pos[plane]);
+    free(neg[plane]);
+  }
   
   free(pos);
   free(neg);
@@ -426,6 +434,7 @@ int main(int argc, char *argv[]) {
   
   long width, height;
   ORI = ReadTIFF(argv[1], &width, &height, &NumPlanes);
+  N = (findMax(ORI[0], width, height) > 255 ? NUMLEVELS-1 : 255);
   ImageWidth = width;
   ImageHeight = height;
   eWidth = width + ksize -1;
