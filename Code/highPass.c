@@ -16,7 +16,7 @@ long ImageSize;
 long NumPlanes;
 int ksize;
 
-typedef unsigned int greyval;
+typedef unsigned long greyval;
 typedef unsigned short greyvalold;
 typedef unsigned char ubyte;
 
