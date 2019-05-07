@@ -16,15 +16,16 @@ long ImageSize;
 long NumPlanes;
 int ksize;
 
-typedef unsigned short greyval;
+typedef unsigned int greyval;
+typedef unsigned short greyvalold;
 typedef unsigned char ubyte;
-greyval N;
+
+greyvalold N;
 
 #define NUMLEVELS     65536
 
 greyval **ORI;    /* Denotes the original ... in the unproceesed input image */
 greyval **new;    /* Denotes the output image */
-greyval **eImage; /* Denotes the extended image */
 
 
 
@@ -53,7 +54,7 @@ FIBITMAP* GenericLoader(const char* lpszPathName, int flag) {
   return NULL;
 }
 
-void WriteTIFF(char *fname, long width, long height, int bitspp, long numplanes, greyval **im){
+void WriteTIFF(char *fname, long width, long height, int bitspp, long numplanes, greyvalold **im){
   FIBITMAP *outmap;
   long i,j,y,x,plane; 
   FREE_IMAGE_FORMAT fif = FreeImage_GetFIFFromFilename(fname);
@@ -79,7 +80,7 @@ void WriteTIFF(char *fname, long width, long height, int bitspp, long numplanes,
     }
 
   } else {
-    greyval *imagebuf;
+    greyvalold *imagebuf;
     if (numplanes==1)
       outmap = FreeImage_AllocateT(FIT_UINT16,width,height,16,0xFFFF,0xFFFF,0xFFFF);
     else   
@@ -87,7 +88,7 @@ void WriteTIFF(char *fname, long width, long height, int bitspp, long numplanes,
 
     i = 0;
     for (j=height-1; j>=0; j--){      
-      imagebuf = (greyval *)FreeImage_GetScanLine(outmap,j);
+      imagebuf = (greyvalold *)FreeImage_GetScanLine(outmap,j);
       for (x=0;x<width;x++,i++)
         for (plane=0;plane<numplanes;plane++)
 	 imagebuf[numplanes*x+plane]=im[plane][i];	
@@ -222,25 +223,20 @@ double *generateKernel(double sigma) {
   
 
   int i = 0, j = 0;
-  
+  double alpha = (double) -(((-kh)*(-kh)) + ((-kh)*(-kh)));
+  double div = exp(alpha/(2*sigma*sigma));
   for(i = 0; i < k; i++) {
     for (j = 0; j < k; j++) {
-      double alpha = (double) -(((i-kh)*(i-kh)) + ((j-kh)*(j-kh)));
-      kernel[i*k+j] = exp(alpha/(2*sigma*sigma));
+      alpha = (double) -(((i-kh)*(i-kh)) + ((j-kh)*(j-kh)));
+      kernel[i*k+j] = exp(alpha/(2*sigma*sigma))/div;
     }
   }
-  
-    double sum = sumArray(kernel, k*k);
-  
-  for(i = 0; i < k*k; i ++) {
-    kernel[i] /= sum;
-  }
- /* for(i = 0; i < k; i++) {
+  for(i = 0; i < k; i++) {
     for(j = 0; j < k; j++) {
       printf("%lf ", kernel[i*k + j]);
     }
     printf("\n");
-  } */
+  } 
   
   return kernel;
 }
@@ -248,8 +244,8 @@ double *generateKernel(double sigma) {
 /* Extending image corners and edges for easier gaussian blurring */
 
 
-void extendImage() {
-  eImage = calloc((size_t)NumPlanes, sizeof(greyval *));
+greyval **extendImage(greyval **img) {
+  greyval **eImage = calloc((size_t)NumPlanes, sizeof(greyval *));
   assert(eImage != NULL);
   long imsize = (eWidth) * (eHeight);
   int i,j, plane;
@@ -264,7 +260,7 @@ void extendImage() {
   
     for(i = 0; i < ksize/2; i++) {
       for(j = 0; j < ksize/2; j++) {
-        eImage[plane][i*(eWidth) + j] = ORI[plane][0];
+        eImage[plane][i*(eWidth) + j] = img[plane][0];
         
       }
     }
@@ -273,7 +269,7 @@ void extendImage() {
     
     for(i = 0; i < ksize/2; i++) {
       for(j = eWidth - ksize/2; j < eWidth; j++) {
-        eImage[plane][i*(eWidth) + j] = ORI[plane][ImageWidth-1];
+        eImage[plane][i*(eWidth) + j] = img[plane][ImageWidth-1];
         
       }
     }
@@ -282,7 +278,7 @@ void extendImage() {
     
     for(i = eHeight - ksize/2; i < eHeight; i++) {
       for(j = 0; j < ksize/2; j++) {
-        eImage[plane][i*(eWidth) + j] = ORI[plane][(ImageHeight-1)*ImageWidth];
+        eImage[plane][i*(eWidth) + j] = img[plane][(ImageHeight-1)*ImageWidth];
         
       }
     }
@@ -291,7 +287,7 @@ void extendImage() {
     
     for(i = eHeight - ksize/2; i < eHeight; i++) {
       for(j = eWidth - ksize/2; j < eWidth; j++) {
-        eImage[plane][i*(eWidth) + j] = ORI[plane][ImageHeight*ImageWidth-1];
+        eImage[plane][i*(eWidth) + j] = img[plane][ImageHeight*ImageWidth-1];
       }
     }
     
@@ -299,13 +295,13 @@ void extendImage() {
     
     for(i = ksize/2; i < eWidth - ksize/2; i++) {
       for(j = 0 ; j < ksize/2;j++) {
-        eImage[plane][i + j*eWidth] = ORI[plane][i-ksize/2];
+        eImage[plane][i + j*eWidth] = img[plane][i-ksize/2];
       } 
     }  
     
     for(i = ksize/2; i < eWidth - ksize/2; i++) {
       for(j = 0 ; j < ksize/2;j++) {
-        eImage[plane][i + (j+eHeight-ksize/2)*eWidth] = ORI[plane][i+(ImageHeight-1)*ImageWidth-ksize/2];
+        eImage[plane][i + (j+eHeight-ksize/2)*eWidth] = img[plane][i+(ImageHeight-1)*ImageWidth-ksize/2];
       } 
     }
     
@@ -314,13 +310,13 @@ void extendImage() {
     
     for(i = ksize/2; i < eHeight - ksize/2; i++) {
       for(j = 0 ; j < ksize/2;j++) {
-        eImage[plane][i*eWidth + j] = ORI[plane][ImageWidth*(i-ksize/2)];
+        eImage[plane][i*eWidth + j] = img[plane][ImageWidth*(i-ksize/2)];
       } 
     } 
     
     for(i = ksize/2; i < eHeight - ksize/2; i++) {
       for(j = eWidth -ksize/2 ; j < eWidth;j++) {
-        eImage[plane][i*eWidth + j] = ORI[plane][ImageWidth*(i-ksize/2) +ImageWidth -1];
+        eImage[plane][i*eWidth + j] = img[plane][ImageWidth*(i-ksize/2) +ImageWidth -1];
       } 
     }
     
@@ -328,31 +324,63 @@ void extendImage() {
     
     for(i = ksize/2; i < eHeight- ksize/2; i++) {
       for(j = ksize/2; j < eWidth - ksize/2; j++) {
-        eImage[plane][i * eWidth + j] = ORI[plane][(i-ksize/2)*ImageWidth + j-ksize/2];
+        eImage[plane][i * eWidth + j] = img[plane][(i-ksize/2)*ImageWidth + j-ksize/2];
       }
     }
   }
-  
+  return eImage;
 }
 
 /* Gaussian blurring of image */
 
 void gaussianBlur() {
   int i,j,k, l, plane;
-  extendImage();
+  int kh = ksize/2;
+  greyval **eImage = extendImage(ORI);
   long imsize = ImageWidth*ImageHeight;
   new = calloc((size_t)NumPlanes, sizeof(greyval *));
+
   assert(new!=NULL);
   for (i=0;i<NumPlanes;i++){
     new[i] = calloc((size_t)imsize, sizeof(greyval));
     assert(new[i]!=NULL);
   }
   double *kernel = generateKernel(getStdDev());
+    double sum = sumArray(kernel,ksize*ksize);
+    printf("sum:%lf\n", sum);
   
-  /* Blurring is happeninng here */
+  /* Blurring is happening here */
   for (plane = 0; plane < NumPlanes; plane++) {
-    
+      
     for(i = 0; i < ImageHeight; i++) {
+      for(j = 0; j < ImageWidth; j++) {    
+        for(k = 0; k < ksize; k++) {
+          
+          new[plane][i*ImageWidth + j] += kernel[k] * eImage[plane][(i+kh)*eWidth + k+j];
+          
+
+        }
+
+      }
+      
+    }
+    eImage = extendImage(new);
+    
+     for(i = 0; i < ImageHeight; i++) {
+      for(j = 0; j < ImageWidth; j++) {   
+        //printf("%d, %d\n",new[plane][i*ImageWidth + j],  ORI[plane][i*ImageWidth+j]);
+        new[plane][i*ImageWidth + j] = 0;
+        for(k = 0; k < ksize; k++) {
+          new[plane][i*ImageWidth + j] += kernel[k] * eImage[plane][i*eWidth + k*eWidth +kh+j];
+          
+        }
+        new[plane][i*ImageWidth+j]/=sum;
+               // printf("%d, %d, %lf\n", ORI[plane][i*ImageWidth + j], new[plane][i*ImageWidth + j], sum);
+      }
+    }
+  }
+    
+    /*for(i = 0; i < ImageHeight; i++) {
       for(j= 0; j < ImageWidth; j++) {
         for(k = 0; k < ksize; k++) {
           for(l = 0; l < ksize; l++) {
@@ -360,45 +388,48 @@ void gaussianBlur() {
           }
         }
       }
-    }
-    free(kernel);
+    }*/
+    for(plane=0; plane<NumPlanes; plane++){
+     free(eImage[plane]);
+   }
+  free(eImage);
+  free(kernel);
   }
-}
 
 /* Original image minus low pass filter */
 
 
 void highPass(int beta) {
-  greyval **pos, **neg;
+  greyvalold **pos, **neg;
   long i, plane;
   long imsize = ImageWidth*ImageHeight;
   
   //Positive values
-  
-  pos = calloc((size_t)NumPlanes, sizeof(greyval *));
+  printf("hello\n");
+  pos = calloc((size_t)NumPlanes, sizeof(greyvalold *));    
   assert(pos!=NULL);
   for (i=0;i<NumPlanes;i++){
-    pos[i] = calloc((size_t)imsize, sizeof(greyval));
+    pos[i] = calloc((size_t)imsize, sizeof(greyvalold));
     assert(pos[i]!=NULL);
   }
   
   //Negative values
   
-  neg = calloc((size_t)NumPlanes, sizeof(greyval *));
+  neg = calloc((size_t)NumPlanes, sizeof(greyvalold *));
   assert(neg!=NULL);
   for (i=0;i<NumPlanes;i++){
-    neg[i] = calloc((size_t)imsize, sizeof(greyval));
+    neg[i] = calloc((size_t)imsize, sizeof(greyvalold));
     assert(neg[i]!=NULL);
   }
   
   //High-pass
   for (plane = 0; plane < NumPlanes; plane++) {
     for(i = 0; i <ImageWidth*ImageHeight; i++) {
-      int pixel = (int) (ORI[plane][i] - new[plane][i]);
+      int pixel =  (ORI[plane][i] - new[plane][i]);
       if(pixel < 0) {
-        neg[plane][i] = (pixel*beta*-1 > N) ? N :(greyval) pixel*-1*beta;
+        neg[plane][i] = (pixel*beta*-1 > N) ? N :(greyvalold) pixel*-1*beta;
       } else {
-        pos[plane][i] = (pixel*beta > N) ? N : (greyval) pixel*beta;
+        pos[plane][i] = (pixel*beta > N) ? N : (greyvalold) pixel*beta;
       }
     }
   }
@@ -431,7 +462,7 @@ int main(int argc, char *argv[]) {
   int i,plane, beta =1;
   
   if (argc < 3)  {
-    printf("Usage: %s inputfile ksize [beta][\n", argv[0]);
+    printf("Usage: %s <inputfile> <ksize> [beta]\n", argv[0]);
     exit(0);
   }
   ksize = atoi(argv[2]);
@@ -458,12 +489,10 @@ int main(int argc, char *argv[]) {
   
   for(plane=0; plane<NumPlanes; plane++){
      free(ORI[plane]);
-     free(eImage[plane]);
      free(new[plane]);
    }
   
   free(ORI);
-  free(eImage);
   free(new);
     
   FreeImage_DeInitialise();
