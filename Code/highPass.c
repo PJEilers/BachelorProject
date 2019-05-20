@@ -219,7 +219,6 @@ double *generateKernel(double sigma) {
   int k = ksize;
   int kh = ksize/2;
   double *kernel = malloc(k*k*sizeof(double));
-  printf("half k:%d\n", kh);
   
 
   int i = 0, j = 0;
@@ -231,17 +230,17 @@ double *generateKernel(double sigma) {
       kernel[i*k+j] = exp(alpha/(2*sigma*sigma))/div;
     }
   }
-  for(i = 0; i < k; i++) {
+  /*for(i = 0; i < k; i++) {
     for(j = 0; j < k; j++) {
       printf("%lf ", kernel[i*k + j]);
     }
     printf("\n");
-  } 
+  }*/ 
   
   return kernel;
 }
 
-/* Extending image corners and edges for easier gaussian blurring */
+/* Extending image edges for easier gaussian blurring */
 
 
 greyval **extendImage(greyval **img) {
@@ -255,42 +254,7 @@ greyval **extendImage(greyval **img) {
   }
   
   for (plane = 0; plane < NumPlanes; plane++) {
-  
-    //Top left
-  
-    for(i = 0; i < ksize/2; i++) {
-      for(j = 0; j < ksize/2; j++) {
-        eImage[plane][i*(eWidth) + j] = img[plane][0];
-        
-      }
-    }
-    
-    //Top right
-    
-    for(i = 0; i < ksize/2; i++) {
-      for(j = eWidth - ksize/2; j < eWidth; j++) {
-        eImage[plane][i*(eWidth) + j] = img[plane][ImageWidth-1];
-        
-      }
-    }
-    
-    //Bottom left
-    
-    for(i = eHeight - ksize/2; i < eHeight; i++) {
-      for(j = 0; j < ksize/2; j++) {
-        eImage[plane][i*(eWidth) + j] = img[plane][(ImageHeight-1)*ImageWidth];
-        
-      }
-    }
-    
-    //Bottom right
-    
-    for(i = eHeight - ksize/2; i < eHeight; i++) {
-      for(j = eWidth - ksize/2; j < eWidth; j++) {
-        eImage[plane][i*(eWidth) + j] = img[plane][ImageHeight*ImageWidth-1];
-      }
-    }
-    
+      
     //Horizontal Edges
     
     for(i = ksize/2; i < eWidth - ksize/2; i++) {
@@ -346,49 +310,40 @@ void gaussianBlur() {
     assert(new[i]!=NULL);
   }
   double *kernel = generateKernel(getStdDev());
-    double sum = sumArray(kernel,ksize*ksize);
-    printf("sum:%lf\n", sum);
+  double sum = sumArray(kernel,ksize*ksize);
+  //printf("sum:%lf\n", sum);
   
   /* Blurring is happening here */
+  
+  
   for (plane = 0; plane < NumPlanes; plane++) {
       
+      
+    // Horizontal
     for(i = 0; i < ImageHeight; i++) {
       for(j = 0; j < ImageWidth; j++) {    
         for(k = 0; k < ksize; k++) {
           
           new[plane][i*ImageWidth + j] += kernel[k] * eImage[plane][(i+kh)*eWidth + k+j];
           
-
         }
-
-      }
-      
+      }      
     }
-    eImage = extendImage(new);
-    
+    eImage = extendImage(new); //extending resulting image again
+    // Vertical
      for(i = 0; i < ImageHeight; i++) {
       for(j = 0; j < ImageWidth; j++) {   
-        //printf("%d, %d\n",new[plane][i*ImageWidth + j],  ORI[plane][i*ImageWidth+j]);
         new[plane][i*ImageWidth + j] = 0;
         for(k = 0; k < ksize; k++) {
+            
           new[plane][i*ImageWidth + j] += kernel[k] * eImage[plane][i*eWidth + k*eWidth +kh+j];
           
         }
-        new[plane][i*ImageWidth+j]/=sum;
-               // printf("%d, %d, %lf\n", ORI[plane][i*ImageWidth + j], new[plane][i*ImageWidth + j], sum);
+        new[plane][i*ImageWidth+j]/=sum; // Normalizing
       }
     }
   }
     
-    /*for(i = 0; i < ImageHeight; i++) {
-      for(j= 0; j < ImageWidth; j++) {
-        for(k = 0; k < ksize; k++) {
-          for(l = 0; l < ksize; l++) {
-            new[plane][i*ImageWidth+j] += kernel[k*ksize + l] * eImage[plane][i*eWidth + j +  l + k*eWidth];
-          }
-        }
-      }
-    }*/
     for(plane=0; plane<NumPlanes; plane++){
      free(eImage[plane]);
    }
@@ -405,7 +360,6 @@ void highPass(int beta) {
   long imsize = ImageWidth*ImageHeight;
   
   //Positive values
-  printf("hello\n");
   pos = calloc((size_t)NumPlanes, sizeof(greyvalold *));    
   assert(pos!=NULL);
   for (i=0;i<NumPlanes;i++){

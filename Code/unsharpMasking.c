@@ -212,7 +212,7 @@ void usm (int beta) {
 int main(int argc, char *argv[]) {
     
   FreeImage_Initialise(0);
-  int beta = 1;
+  int beta = 1, plane = 0;
   if (argc < 5) {
     printf ("Usage: %s original positive negative beta\n", argv[0]);
   }
@@ -238,5 +238,13 @@ int main(int argc, char *argv[]) {
     WriteTIFF("usm.tif", ImageWidth, ImageHeight, 8, NumPlanes, ORI);
   }
   
+  for(plane=0; plane<NumPlanes; plane++){
+     free(ORI[plane]);
+     free(pos[plane]);
+     free(neg[plane]);
+   }
   
+  free(ORI);
+  free(pos);
+  free(neg);
 }
